@@ -1,0 +1,5 @@
+dist/
+node_modules/
+node-v23.11.0-linux-x64.tar.xz
+node-v23.11.0-linux-x64/
+sea-prep.blob

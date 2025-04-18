@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES5",
+    "module": "CommonJS",
+    // "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
