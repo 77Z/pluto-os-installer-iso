@@ -3,6 +3,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
 import { writeFileSync } from 'fs';
+import cliSpinners from "cli-spinners";
+import ora from "ora";
 
 const execCommand = promisify(exec);
 
@@ -69,7 +71,7 @@ async function main() {
 		loop: false,
 	});
 	
-	const prettyName = await input({ message: 'pretty name of primary user' });
+	const prettyName = await input({ message: 'pretty name of primary user', required: true });
 	const internalUsername = prettyName.toLocaleLowerCase();
 
 	const unixTimezone = await input({
@@ -101,18 +103,117 @@ async function main() {
 
 	console.log(chalk.green("✔ installing plutoos!"));
 
-	writeFileSync("parttable", `label: gpt
-device: /dev/${driveToPart}
-unit: sectors
+	const partitioningSpinner = ora({
+		spinner: cliSpinners.bouncingBar,
+		text: "partitioning drive..."
+	});
 
-1: size=512MiB,type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B,name=chainloader
-2: size=512MiB,type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B,name=efi-a
-3: size=512MiB,type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B,name=efi-b
-4: size=15GiB,type=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709,name=root-a
-4: size=15GiB,type=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709,name=root-b
-5: type=933AC7E1-2EB4-4F13-B844-0E14E2AEF915,name=user-home`, { encoding: "utf-8" });
+	// This is so dumb
+	writeFileSync("formatscript", `#!/usr/bin/env bash
+(
+echo g;
+echo n;
+echo ;
+echo ;
+echo +512M;
+echo t;
+echo 1;
+echo n;
+echo ;
+echo ;
+echo +512M;
+echo t;
+echo ;
+echo 1;
+echo n;
+echo ;
+echo ;
+echo +512M;
+echo t;
+echo ;
+echo 1;
+echo n;
+echo ;
+echo ;
+echo +12G;
+echo t;
+echo ;
+echo 23;
+echo n;
+echo ;
+echo ;
+echo +12G;
+echo t;
+echo ;
+echo 23;
+echo n;
+echo ;
+echo ;
+echo ;
+echo t;
+echo ;
+echo 42;
+echo w;
+) | fdisk /dev/${driveToPart}
 
-	execCommand(`bash -c "cat parttable | sfdisk /dev/${driveToPart}"`)
+`, { encoding: "utf-8" });
+
+	await execCommand(`bash -c "chmod +x formatscript && ./formatscript"`)
+
+	partitioningSpinner.stopAndPersist({ text: "partitioned drive" });
+
+	console.log(await execCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`));
+
+	const partitions: string[] = (await execCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`)).stdout.split("\n");
+
+	partitions.shift();
+
+	for (let i = 0; i < partitions.length; i++) {
+		partitions[i] = partitions[i].substring(0, partitions[i].indexOf(" "));
+	}
+
+	// format first 3 partitions
+	const chainloaderPartPath = "/dev/" + partitions[0];
+	const efiAPartPath        = "/dev/" + partitions[1];
+	const efiBPartPath        = "/dev/" + partitions[2];
+	const rootAPartPath       = "/dev/" + partitions[3];
+	const rootBPartPath       = "/dev/" + partitions[4];
+	const homePartPath        = "/dev/" + partitions[5];
+
+
+	console.log("-------- partitions to format ---------");
+
+	console.log(`chainloader : ${chainloaderPartPath}   --->  ExFAT`);
+	console.log(`efi A       : ${efiAPartPath}   --->  ExFAT`);
+	console.log(`efi B       : ${efiBPartPath}   --->  ExFAT`);
+	console.log(`root A      : ${rootAPartPath}   --->  EXT4`);
+	console.log(`root B      : ${rootBPartPath}   --->  EXT4`);
+	console.log(`user home   : ${homePartPath}   --->  EXT4`);
+
+	console.log("---------------------------------------");
+
+	const formattingSpinner = ora({
+		spinner: cliSpinners.bouncingBar,
+		text: "formatting partitions..."
+	});
+
+	await execCommand(`mkfs.fat -F32 ${chainloaderPartPath}`);
+	await execCommand(`mkfs.fat -F32 ${efiAPartPath}`);
+	await execCommand(`mkfs.fat -F32 ${efiBPartPath}`);
+	await execCommand(`mkfs.ext4 ${rootAPartPath}`);
+	await execCommand(`mkfs.ext4 ${rootBPartPath}`);
+	await execCommand(`mkfs.ext4 ${homePartPath}`);
+
+	formattingSpinner.stopAndPersist({ text: "formatted partitions" });
+
+	const chainloaderInstallSpinner = ora({
+		spinner: cliSpinners.bouncingBar,
+		text: "installing chainloader..."
+	});
+
+	await new Promise((resolve) => setTimeout(resolve, 5000));
+
+	chainloaderInstallSpinner.stopAndPersist({ text: "installed chainloader" });
 
 }
 

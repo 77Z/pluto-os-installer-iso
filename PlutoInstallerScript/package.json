@@ -12,6 +12,8 @@
   "dependencies": {
     "@inquirer/prompts": "^7.4.1",
     "chalk": "^5.4.1",
+    "cli-spinners": "^3.2.0",
+    "ora": "^8.2.0",
     "terser": "^5.39.0"
   },
   "devDependencies": {

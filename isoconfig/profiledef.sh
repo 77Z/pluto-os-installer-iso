@@ -21,5 +21,5 @@ file_permissions=(
   ["/root/.gnupg"]="0:0:700"
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
-  ["/root/installPluto"]="0:0:755"
+  ["/usr/bin/installPluto"]="0:0:755"
 )
