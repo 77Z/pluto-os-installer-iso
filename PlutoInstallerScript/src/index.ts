@@ -1,8 +1,10 @@
+// BE AWARE!! This is some messy code...
+
 import { input, select, confirm } from '@inquirer/prompts';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
-import { writeFileSync } from 'fs';
+import { readFileSync, statSync, writeFileSync } from 'fs';
 import cliSpinners from "cli-spinners";
 import ora from "ora";
 
@@ -34,9 +36,33 @@ async function hasInternetConnection(): Promise<boolean> {
 	}
 }
 
+function getUUIDfromBlkidOutput(blkidData: string[], devPath: string): string | null {
+
+	// Example data
+	// /dev/nvme0n1p3: UUID="f89d4c25-1963-40a1-a92f-6091362ca396" BLOCK_SIZE="4096" TYPE="ext4" PARTUUID="6e2edffe-1884-47da-9a17-20ba18ae17f9"
+
+	for (let i = 0; i < blkidData.length; i++) {
+		if (blkidData[i].startsWith(devPath)) {
+			const stringToParse = blkidData[i]; // see example data above
+			const uuidExtractPart1 =  stringToParse.substring(stringToParse.indexOf(`UUID="`) + 6);
+			return uuidExtractPart1.substring(0, uuidExtractPart1.indexOf(`"`));
+		}
+	}
+
+	return null;
+}
+
 async function main() {
 
-	console.log(chalk.green("PlutoOS Installer v0.1.1"));
+	// verify we are running on the live ISO to not mess up anyone's real
+	// systems by accident :/
+	try { statSync("/version"); }
+	catch (error) {
+		console.error("Not running on PlutoOS Installer ISO!");
+		process.exit(1);
+	}
+
+	console.log(chalk.green("PlutoOS Installer v0.1.3"));
 
 	process.stdout.write(chalk.bgWhite("checking for internet..."));
 	if (!await hasInternetConnection()) {
@@ -158,13 +184,13 @@ echo w;
 
 `, { encoding: "utf-8" });
 
-	await execCommand(`bash -c "chmod +x formatscript && ./formatscript"`)
+	await executeCommand(`bash -c "chmod +x formatscript && ./formatscript"`)
 
 	partitioningSpinner.stopAndPersist({ text: "partitioned drive" });
 
-	console.log(await execCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`));
+	console.log(await executeCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`));
 
-	const partitions: string[] = (await execCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`)).stdout.split("\n");
+	const partitions: string[] = (await executeCommand(`bash -c "lsblk --raw | grep '${driveToPart}*'"`)).split("\n");
 
 	partitions.shift();
 
@@ -197,23 +223,79 @@ echo w;
 		text: "formatting partitions..."
 	});
 
-	await execCommand(`mkfs.fat -F32 ${chainloaderPartPath}`);
-	await execCommand(`mkfs.fat -F32 ${efiAPartPath}`);
-	await execCommand(`mkfs.fat -F32 ${efiBPartPath}`);
-	await execCommand(`mkfs.ext4 ${rootAPartPath}`);
-	await execCommand(`mkfs.ext4 ${rootBPartPath}`);
-	await execCommand(`mkfs.ext4 ${homePartPath}`);
+	await executeCommand(`mkfs.fat -F32 ${chainloaderPartPath}`);
+	await executeCommand(`mkfs.fat -F32 ${efiAPartPath}`);
+	await executeCommand(`mkfs.fat -F32 ${efiBPartPath}`);
+	await executeCommand(`mkfs.ext4 ${rootAPartPath}`);
+	await executeCommand(`mkfs.ext4 ${rootBPartPath}`);
+	await executeCommand(`mkfs.ext4 ${homePartPath}`);
 
 	formattingSpinner.stopAndPersist({ text: "formatted partitions" });
 
-	const chainloaderInstallSpinner = ora({
-		spinner: cliSpinners.bouncingBar,
-		text: "installing chainloader..."
-	});
 
-	await new Promise((resolve) => setTimeout(resolve, 5000));
+	// Label partitions with a file in their root directories
 
-	chainloaderInstallSpinner.stopAndPersist({ text: "installed chainloader" });
+	await executeCommand(`mount --mkdir ${chainloaderPartPath} /mnt/chainloader`);
+	await executeCommand(`mount --mkdir ${efiAPartPath} /mnt/efiA`);
+	await executeCommand(`mount --mkdir ${efiBPartPath} /mnt/efiB`);
+	await executeCommand(`mount --mkdir ${rootAPartPath} /mnt/rootA`);
+	await executeCommand(`mount --mkdir ${rootBPartPath} /mnt/rootB`);
+	await executeCommand(`mount --mkdir ${homePartPath} /mnt/home`);
+
+	writeFileSync(`/mnt/rootA/label`, "rootA", "utf-8");
+	writeFileSync(`/mnt/rootB/label`, "rootB", "utf-8");
+
+	await executeCommand(`dosfslabel ${chainloaderPartPath} CHAINLOADER`);
+
+	const blkidOutput: string[] = (await executeCommand("blkid")).split("\n");
+
+	const efiAUUID = getUUIDfromBlkidOutput(blkidOutput, efiAPartPath);
+	const efiBUUID = getUUIDfromBlkidOutput(blkidOutput, efiBPartPath);
+	const rootAUUID = getUUIDfromBlkidOutput(blkidOutput, rootAPartPath);
+	const rootBUUID = getUUIDfromBlkidOutput(blkidOutput, rootBPartPath);
+	const homeUUID = getUUIDfromBlkidOutput(blkidOutput, homePartPath);
+
+	// ASSERT
+	if (!efiAUUID || !efiBUUID || !rootAUUID || !rootBUUID || !homeUUID) {
+		console.error(chalk.red("failed to get uuids!"));
+		process.exit(1);
+	}
+
+	console.log("--------- persistant uuids ------------");
+	console.log(`efi A       : ${efiAUUID}`);
+	console.log(`efi B       : ${efiBUUID}`);
+	console.log(`root A      : ${rootAUUID}`);
+	console.log(`root B      : ${rootBUUID}`);
+	console.log(`user home   : ${homeUUID}`);
+	console.log("---------------------------------------");
+
+	console.log(chalk.green("Writing partition uuid table to chainloader!"));
+
+	writeFileSync("/mnt/chainloader/uuidtable", JSON.stringify({
+		efiA: efiAUUID,
+		efiB: efiBUUID,
+		rootA: rootAUUID,
+		rootB: rootBUUID,
+		home: homeUUID,
+	}), 'utf-8');
+
+	console.log("Unmounting everything");
+	await executeCommand(`umount /mnt/chainloader`);
+	await executeCommand(`umount /mnt/efiA`);
+	await executeCommand(`umount /mnt/efiB`);
+	await executeCommand(`umount /mnt/rootA`);
+	await executeCommand(`umount /mnt/rootB`);
+	await executeCommand(`umount /mnt/home`);
+
+
+	// const chainloaderInstallSpinner = ora({
+	// 	spinner: cliSpinners.bouncingBar,
+	// 	text: "installing chainloader..."
+	// });
+
+	// await new Promise((resolve) => setTimeout(resolve, 5000));
+
+	// chainloaderInstallSpinner.stopAndPersist({ text: "installed chainloader" });
 
 }
 

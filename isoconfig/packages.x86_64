@@ -119,6 +119,7 @@ vim
 virtualbox-guest-utils-nox
 vpnc
 wireless-regdb
+wget
 wireless_tools
 wpa_supplicant
 wvdial

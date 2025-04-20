@@ -1,9 +1,11 @@
-PLUTO OS INSTALLER ISO. ONLY USE IF YOU KNOW WHAT YOU'RE DOING.
+PLUTO OS INSTALLER ISO
 
 [35miwctl[0m is available to connect to wifi.
 
-https://pluto.77z.dev
-
 run [35minstallPluto[0m to run the installer.
+run [35mupdateInstaller[0m to download the latest installer, note however
+this might not work on versions with significant age. to guarantee a good
+experience, download the latest iso from pluto.77z.dev
+
 
 [41m [41m [41m [40m [44m [40m [41m [46m [45m [41m [46m [43m [41m [44m [45m [40m [44m [40m [41m [44m [41m [41m [46m [42m [41m [44m [43m [41m [45m [40m [40m [44m [40m [41m [44m [42m [41m [46m [44m [41m [46m [47m [0m

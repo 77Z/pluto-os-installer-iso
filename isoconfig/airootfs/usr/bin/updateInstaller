@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+rm /usr/bin/installPluto
+
+if [[ -n "${DEV}" ]]; then
+	echo "Downloading DEVELOPMENT version of installer"
+	# DNS pretty name set in /etc/hosts
+	wget -O /usr/bin/installPluto http://framework/installPluto
+else
+	echo "Downloading PRODUCTION version of installer"
+fi
+
+chmod +x /usr/bin/installPluto
