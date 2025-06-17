@@ -277,6 +277,7 @@ echo w;
 		rootA: rootAUUID,
 		rootB: rootBUUID,
 		home: homeUUID,
+		partToBoot: "A"
 	}), 'utf-8');
 
 	console.log("Unmounting everything");
